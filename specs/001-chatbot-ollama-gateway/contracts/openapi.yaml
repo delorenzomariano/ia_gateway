@@ -1,0 +1,343 @@
+openapi: 3.1.0
+info:
+  title: IA Gateway API
+  version: 1.0.0
+  description: |
+    API entre el componente de chat del frontend y el backend IA Gateway.
+    Sin autenticación en v1: acceso restringido por origen (CORS) y red de cliente
+    (excepción documentada en plan.md); una IP fuera de las redes permitidas recibe
+    `403 ACCESS_DENIED` en cualquier ruta bajo `/api/`. Todas las respuestas incluyen el
+    header `X-Correlation-ID`. Rutas o métodos inexistentes bajo `/api/` responden con el
+    mismo formato de error (`NOT_FOUND`, `METHOD_NOT_ALLOWED`). Streaming: ver `sse-events.md`.
+servers:
+  - url: http://localhost:8000
+paths:
+  /api/v1/health:
+    get:
+      operationId: getHealth
+      summary: Estado del backend y sus dependencias
+      responses:
+        '200':
+          description: Backend y dependencias operativos
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+        '503':
+          description: Alguna dependencia no está disponible (el cuerpo detalla cuál)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+  /api/v1/conversations:
+    post:
+      operationId: createConversation
+      summary: Crea una conversación vacía
+      parameters:
+        - $ref: '#/components/parameters/CorrelationIdHeader'
+      responses:
+        '201':
+          description: Conversación creada
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Conversation' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/conversations/{conversationId}:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/CorrelationIdHeader'
+    get:
+      operationId: getConversation
+      summary: Devuelve la conversación con su historial visible (mensajes user y assistant)
+      responses:
+        '200':
+          description: Conversación vigente
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ConversationWithMessages' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '404': { $ref: '#/components/responses/ConversationNotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
+    delete:
+      operationId: deleteConversation
+      summary: Descarta la conversación (para iniciar una nueva)
+      responses:
+        '204':
+          description: Eliminada (idempotente; también si no existía o venció)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '409': { $ref: '#/components/responses/GenerationInProgress' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/conversations/{conversationId}/messages:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/CorrelationIdHeader'
+    post:
+      operationId: sendMessage
+      summary: Envía un mensaje del usuario y obtiene la respuesta del asistente
+      description: |
+        Con `Accept: application/json` la respuesta se devuelve completa.
+        Con `Accept: text/event-stream` se devuelve como stream SSE (ver `sse-events.md`);
+        los errores detectados antes de iniciar el stream se devuelven igual como JSON con
+        el código HTTP correspondiente. Abortar la petición cancela la generación; el texto
+        recibido se guarda como mensaje `incomplete`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SendMessageRequest' }
+      responses:
+        '200':
+          description: Respuesta del asistente
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendMessageResponse' }
+            text/event-stream:
+              schema:
+                type: string
+                description: Secuencia de eventos SSE definida en sse-events.md
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '404': { $ref: '#/components/responses/ConversationNotFound' }
+        '409': { $ref: '#/components/responses/GenerationInProgress' }
+        '422': { $ref: '#/components/responses/ValidationError' }
+        '502': { $ref: '#/components/responses/LlmInvalidResponse' }
+        '503': { $ref: '#/components/responses/LlmUnavailable' }
+        '504': { $ref: '#/components/responses/LlmTimeout' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+  /api/v1/conversations/{conversationId}/messages/retry:
+    parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/CorrelationIdHeader'
+    post:
+      operationId: retryLastMessage
+      summary: Regenera la respuesta al último mensaje del usuario
+      description: |
+        Válido solo si el último mensaje visible es del usuario o una respuesta del asistente
+        con estado `error`. Mismos modos de respuesta (JSON / SSE) que `sendMessage`.
+      responses:
+        '200':
+          description: Respuesta del asistente
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SendMessageResponse' }
+            text/event-stream:
+              schema:
+                type: string
+                description: Secuencia de eventos SSE definida en sse-events.md
+        '403': { $ref: '#/components/responses/AccessDenied' }
+        '404': { $ref: '#/components/responses/ConversationNotFound' }
+        '409': { $ref: '#/components/responses/GenerationInProgress' }
+        '422':
+          description: No hay nada para reintentar (código `NOTHING_TO_RETRY`)
+          headers:
+            X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '502': { $ref: '#/components/responses/LlmInvalidResponse' }
+        '503': { $ref: '#/components/responses/LlmUnavailable' }
+        '504': { $ref: '#/components/responses/LlmTimeout' }
+        '500': { $ref: '#/components/responses/InternalError' }
+
+components:
+  parameters:
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    CorrelationIdHeader:
+      name: X-Correlation-ID
+      in: header
+      required: false
+      description: Opcional; si es válido (1–64 caracteres `[A-Za-z0-9-]`) se reutiliza, si no se genera uno
+      schema: { type: string, pattern: '^[A-Za-z0-9-]{1,64}$' }
+
+  headers:
+    CorrelationId:
+      description: Identificador de correlación de la solicitud
+      schema: { type: string }
+
+  schemas:
+    Health:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        checks:
+          type: object
+          required: [database, llm]
+          properties:
+            database: { $ref: '#/components/schemas/HealthCheck' }
+            llm:
+              allOf:
+                - $ref: '#/components/schemas/HealthCheck'
+                - type: object
+                  properties:
+                    model: { type: string }
+                    model_available: { type: boolean }
+
+    HealthCheck:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, enum: [ok, error] }
+        detail: { type: string }
+
+    Conversation:
+      type: object
+      required: [id, created_at, last_activity_at, expires_at]
+      properties:
+        id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+
+    ConversationWithMessages:
+      allOf:
+        - $ref: '#/components/schemas/Conversation'
+        - type: object
+          required: [messages, generation_in_progress]
+          properties:
+            generation_in_progress: { type: boolean }
+            messages:
+              type: array
+              items: { $ref: '#/components/schemas/Message' }
+
+    Message:
+      type: object
+      required: [id, role, content, status, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        status: { type: string, enum: [complete, incomplete, error] }
+        error_code: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 4000
+          description: Se recorta; vacío tras recortar → 422. El máximo es configurable (por defecto 4000).
+
+    SendMessageResponse:
+      type: object
+      required: [user_message, assistant_message]
+      properties:
+        user_message: { $ref: '#/components/schemas/Message' }
+        assistant_message: { $ref: '#/components/schemas/Message' }
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, correlation_id]
+          properties:
+            code:
+              type: string
+              enum:
+                - VALIDATION_ERROR
+                - NOTHING_TO_RETRY
+                - NOT_FOUND
+                - METHOD_NOT_ALLOWED
+                - ACCESS_DENIED
+                - CONVERSATION_NOT_FOUND
+                - GENERATION_IN_PROGRESS
+                - LLM_UNAVAILABLE
+                - LLM_TIMEOUT
+                - LLM_INVALID_RESPONSE
+                - INTERNAL_ERROR
+            message:
+              type: string
+              description: Texto en español apto para mostrar al usuario
+            correlation_id: { type: string }
+            details:
+              type: array
+              description: Solo en VALIDATION_ERROR
+              items:
+                type: object
+                properties:
+                  field: { type: string }
+                  issue: { type: string }
+
+  responses:
+    ValidationError:
+      description: Entrada inválida (código `VALIDATION_ERROR`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    AccessDenied:
+      description: Origen o red de cliente no permitidos (código `ACCESS_DENIED`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    ConversationNotFound:
+      description: Inexistente o vencida (código `CONVERSATION_NOT_FOUND`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    GenerationInProgress:
+      description: Ya hay una respuesta generándose en esta conversación (código `GENERATION_IN_PROGRESS`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmInvalidResponse:
+      description: El modelo devolvió una respuesta vacía o malformada (código `LLM_INVALID_RESPONSE`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmUnavailable:
+      description: No se pudo contactar al modelo (código `LLM_UNAVAILABLE`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    LlmTimeout:
+      description: El modelo excedió el tiempo máximo (código `LLM_TIMEOUT`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InternalError:
+      description: Error inesperado (código `INTERNAL_ERROR`)
+      headers:
+        X-Correlation-ID: { $ref: '#/components/headers/CorrelationId' }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }

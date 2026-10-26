@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IA Gateway</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --background: #051424;
+        --surface-lowest: #010f1f;
+        --surface-low: #0d1c2d;
+        --surface: #122131;
+        --surface-high: #1c2b3c;
+        --on-surface: #d4e4fa;
+        --on-surface-variant: #bdc8d1;
+        --outline-variant: #3e484f;
+        --primary: #8ed5ff;
+        --primary-container: #38bdf8;
+        --on-primary-container: #004965;
+        --secondary: #bdc2ff;
+        --secondary-container: #2f3aa3;
+        --warning: #fbbf24;
+        --danger: #ffb4ab;
+        --ok: #34d399;
+        --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        --font-display: "Plus Jakarta Sans", var(--font-body);
+        --mono: ui-monospace, Consolas, monospace;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; }
+      body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: var(--background);
+        color: var(--on-surface);
+        font-family: var(--font-body);
+        font-size: 1rem;
+        line-height: 1.5;
+        -webkit-font-smoothing: antialiased;
+        overflow-x: hidden;
+      }
+      ::selection { background: var(--primary); color: #00354a; }
+      a { color: inherit; }
+      code, pre { font-family: var(--mono); }
+      .container { width: 100%; max-width: 80rem; margin: 0 auto; padding: 0 1.5rem; }
+      @media (min-width: 1024px) { .container { padding: 0 3rem; } }
+
+      /* Encabezado */
+      .site-header {
+        position: fixed; inset: 0 0 auto; z-index: 50;
+        background: rgba(5, 20, 36, .75);
+        -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+        box-shadow: 0 1px 8px rgba(0, 0, 0, .04);
+      }
+      .site-header .container {
+        height: 5rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem;
+      }
+      .brand { display: flex; align-items: center; gap: .75rem; text-decoration: none; }
+      .brand svg { width: 2rem; height: 2rem; }
+      .brand span {
+        font-family: var(--font-display); font-size: 1.25rem; font-weight: 600; letter-spacing: -.01em;
+      }
+      .site-nav { display: flex; align-items: center; gap: 1.5rem; }
+      .site-nav a, .site-footer a {
+        font-size: .875rem; font-weight: 500; letter-spacing: .01em; text-decoration: none;
+        color: var(--on-surface-variant); transition: color .2s;
+      }
+      .site-nav a:hover, .site-footer a:hover { color: var(--on-surface); }
+      @media (max-width: 520px) { .site-nav .optional { display: none; } }
+
+      /* Brillos de fondo */
+      main { position: relative; flex: 1; padding-top: 5rem; overflow: hidden; }
+      .glow { position: absolute; border-radius: 50%; pointer-events: none; z-index: 0; }
+      .glow-1 { top: -10rem; left: 25%; width: 600px; height: 600px;
+        background: rgba(142, 213, 255, .10); filter: blur(140px); }
+      .glow-2 { top: 35rem; right: 2.5rem; width: 500px; height: 500px;
+        background: rgba(47, 58, 163, .20); filter: blur(160px); }
+      .glow-3 { bottom: -5rem; left: 33%; width: 700px; height: 400px;
+        background: rgba(56, 189, 248, .10); filter: blur(180px); }
+      .mesh {
+        position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+        background-image: radial-gradient(rgba(142, 213, 255, .18) 1px, transparent 1px);
+        background-size: 28px 28px;
+        -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 35%, #000 20%, transparent 75%);
+        mask-image: radial-gradient(ellipse 70% 60% at 50% 35%, #000 20%, transparent 75%);
+      }
+      section { position: relative; z-index: 1; }
+
+      /* Portada */
+      .hero {
+        min-height: calc(92vh - 5rem); display: flex; align-items: center; justify-content: center;
+        padding: 5rem 1.5rem; text-align: center;
+      }
+      .hero-inner { max-width: 56rem; display: flex; flex-direction: column; align-items: center; gap: 1.5rem; }
+      .badge {
+        display: inline-flex; align-items: center; gap: .5rem; padding: .375rem 1rem;
+        border-radius: 999px; background: rgba(28, 43, 60, .6);
+        -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+        box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+        font-size: .75rem; font-weight: 500; letter-spacing: .05em; text-transform: uppercase;
+        color: var(--primary);
+      }
+      .dot {
+        width: .5rem; height: .5rem; border-radius: 50%; background: var(--outline-variant);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      .badge[data-state="ok"] .dot { background: var(--primary-container);
+        box-shadow: 0 0 10px rgba(56, 189, 248, .8); }
+      .badge[data-state="degraded"] { color: var(--warning); }
+      .badge[data-state="degraded"] .dot { background: var(--warning); }
+      .badge[data-state="offline"] { color: var(--danger); }
+      .badge[data-state="offline"] .dot { background: var(--danger); animation: none; }
+      @keyframes pulse { 50% { opacity: .4; } }
+      h1 {
+        margin: 0; max-width: 48rem; font-family: var(--font-display);
+        font-size: 2.25rem; line-height: 2.75rem; letter-spacing: -.02em; font-weight: 600;
+        text-wrap: balance;
+      }
+      @media (min-width: 768px) { h1 { font-size: 3.5rem; line-height: 4rem; letter-spacing: -.025em; } }
+      .gradient-text {
+        background: linear-gradient(90deg, var(--primary), var(--primary-container), var(--secondary));
+        -webkit-background-clip: text; background-clip: text; color: transparent;
+      }
+      .lead {
+        margin: 0; max-width: 42rem; font-size: 1.125rem; line-height: 1.75rem;
+        color: var(--on-surface-variant); text-wrap: balance;
+      }
+      .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem; padding-top: 1rem; }
+      .btn {
+        display: inline-flex; align-items: center; gap: .625rem; padding: .875rem 2rem;
+        border-radius: 999px; border: none; cursor: pointer; text-decoration: none;
+        font: 600 .875rem/1.25rem var(--font-body); letter-spacing: .01em;
+        transition: box-shadow .3s, background .3s;
+      }
+      .btn svg { width: 18px; height: 18px; }
+      .btn-primary {
+        background: linear-gradient(90deg, var(--primary-container), var(--secondary-container));
+        color: var(--on-primary-container);
+        box-shadow: 0 0 30px -5px rgba(56, 189, 248, .4);
+      }
+      .btn-primary:hover { box-shadow: 0 0 40px 0 rgba(56, 189, 248, .6); }
+      .btn-ghost { background: rgba(28, 43, 60, .6); color: var(--on-surface); }
+      .btn-ghost:hover { background: rgba(39, 54, 71, .8); }
+      .btn:focus-visible, a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+
+      /* Capacidades */
+      .features { padding: 0 0 5rem; }
+      .features h2, .integrate h2 {
+        margin: 0 0 .5rem; font-family: var(--font-display); font-size: 1.75rem; line-height: 2.25rem;
+        font-weight: 600; letter-spacing: -.015em;
+      }
+      .section-lead { margin: 0 0 2.5rem; color: var(--on-surface-variant); }
+      .cards { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); }
+      .card {
+        padding: 1.5rem; border-radius: 1.5rem; background: rgba(13, 28, 45, .6);
+        -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+        box-shadow: inset 0 0 0 1px rgba(62, 72, 79, .5);
+      }
+      .card-icon {
+        width: 2.5rem; height: 2.5rem; border-radius: .75rem; display: grid; place-items: center;
+        margin-bottom: 1rem; background: rgba(142, 213, 255, .12); color: var(--primary);
+      }
+      .card-icon svg { width: 20px; height: 20px; }
+      .card h3 { margin: 0 0 .5rem; font-family: var(--font-display); font-size: 1.125rem; font-weight: 600; }
+      .card p { margin: 0; font-size: .875rem; line-height: 1.25rem; color: var(--on-surface-variant); }
+
+      /* Integración */
+      .integrate { padding: 0 0 5rem; }
+      .code {
+        margin: 0; padding: 1.25rem 1.5rem; border-radius: 1rem; overflow-x: auto;
+        background: var(--surface-lowest); box-shadow: inset 0 0 0 1px rgba(62, 72, 79, .5);
+        font-size: .875rem; line-height: 1.5rem; color: var(--on-surface-variant);
+      }
+      .code .tag { color: var(--primary); }
+      .code .attr { color: var(--secondary); }
+      .code .str { color: #a7f3d0; }
+      .integrate p { color: var(--on-surface-variant); font-size: .875rem; }
+      .integrate p code {
+        padding: 1px 6px; border-radius: 4px; background: var(--surface-lowest); color: var(--secondary);
+      }
+
+      /* Pie */
+      .site-footer { position: relative; z-index: 1; background: var(--surface-lowest); }
+      .site-footer .container {
+        padding-top: 2.5rem; padding-bottom: 2.5rem; display: flex; flex-wrap: wrap;
+        align-items: center; justify-content: space-between; gap: 1.5rem;
+      }
+      .footer-info { display: flex; align-items: center; gap: .75rem; font-size: .75rem;
+        color: var(--on-surface-variant); letter-spacing: .025em; }
+      .footer-info .dot { background: var(--primary); }
+      .footer-links { display: flex; flex-wrap: wrap; gap: 1.5rem; }
+
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation: none !important; transition: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a class="brand" href="/">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <defs>
+              <linearGradient id="brand-g" x1="0" y1="1" x2="1" y2="0">
+                <stop offset="0" stop-color="#38bdf8" />
+                <stop offset="1" stop-color="#bdc2ff" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="28" height="28" rx="9" fill="url(#brand-g)" />
+            <path d="M10 21V11m6 10V11m6 10V11M10 16h12" stroke="#00354a" stroke-width="2.4"
+              stroke-linecap="round" fill="none" />
+          </svg>
+          <span>IA Gateway</span>
+        </a>
+        <nav class="site-nav" aria-label="Principal">
+          <a class="optional" href="#capacidades">Capacidades</a>
+          <a class="optional" href="#integracion">Integración</a>
+          <a href="/docs">API</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <div class="glow glow-1"></div>
+      <div class="glow glow-2"></div>
+      <div class="glow glow-3"></div>
+      <div class="mesh"></div>
+
+      <section class="hero">
+        <div class="hero-inner">
+          <div class="badge" id="status-badge" data-state="checking" role="status">
+            <span class="dot"></span>
+            <span id="status-text">Verificando el asistente…</span>
+          </div>
+          <h1>
+            IA Gateway
+            <span class="gradient-text">— Asistencia conversacional con IA local</span>
+          </h1>
+          <p class="lead">
+            Un asistente que responde en tiempo real usando un modelo de lenguaje que corre en
+            tu propia red, listo para incorporarse a cualquier página.
+          </p>
+          <div class="actions">
+            <button type="button" class="btn btn-primary" id="open-chat">
+              <span>Iniciar conversación</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+            <a class="btn btn-ghost" href="#integracion">Integrarlo en otra página</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="features" id="capacidades">
+        <div class="container">
+          <h2>Capacidades</h2>
+          <p class="section-lead">Lo que ofrece el asistente en esta versión.</p>
+          <div class="cards">
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M13 2 4 14h7l-1 8 9-12h-7z" />
+                </svg>
+              </div>
+              <h3>Respuestas en tiempo real</h3>
+              <p>El texto aparece a medida que el modelo lo genera. Podés detenerlo en cualquier momento.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /><path d="M12 7v5l3 2" />
+                </svg>
+              </div>
+              <h3>Conversación persistente</h3>
+              <p>El historial se conserva al recargar la página durante 24 horas desde el último mensaje.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z" />
+                </svg>
+              </div>
+              <h3>Preparado para herramientas</h3>
+              <p>El modelo puede usar herramientas externas habilitadas por configuración, con entradas validadas.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
+                </svg>
+              </div>
+              <h3>Privado por diseño</h3>
+              <p>El modelo corre localmente y, por defecto, los registros no guardan el texto de las conversaciones.</p>
+            </article>
+            <article class="card">
+              <div class="card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="4" width="18" height="16" rx="3" /><circle cx="9" cy="10" r="1.8" />
+                  <path d="m21 16-5-5-9 9" />
+                </svg>
+              </div>
+              <h3>Lectura de imágenes</h3>
+              <p>Adjuntá una captura o la foto de un documento y el asistente responde sobre su texto.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="integrate" id="integracion">
+        <div class="container">
+          <h2>Integración</h2>
+          <p class="section-lead">El chat es un componente reutilizable: dos líneas lo agregan a cualquier página.</p>
+          <pre class="code"><code><span class="tag">&lt;script</span> <span class="attr">type</span>=<span class="str">"module"</span> <span class="attr">src</span>=<span class="str">"http://localhost:8000/widget/ia-chat-widget.js"</span><span class="tag">&gt;&lt;/script&gt;</span>
+<span class="tag">&lt;ia-chat-widget</span> <span class="attr">backend-url</span>=<span class="str">"http://localhost:8000"</span> <span class="attr">title</span>=<span class="str">"Asistente"</span><span class="tag">&gt;&lt;/ia-chat-widget&gt;</span></code></pre>
+          <p>
+            El origen de la página debe figurar en <code>IA_GATEWAY_ALLOWED_ORIGINS</code>. Para
+            consumir la API directamente desde otro frontend, ver la
+            <a href="/docs">documentación de la API</a> y el README del proyecto.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-info">
+          <span class="dot"></span>
+          <span>IA Gateway · v1 · uso en red local</span>
+        </div>
+        <nav class="footer-links" aria-label="Recursos">
+          <a href="/docs">Documentación de la API</a>
+          <a href="/api/v1/health">Estado del servicio</a>
+          <a href="/widget/ia-chat-widget.js">Componente de chat</a>
+        </nav>
+      </div>
+    </footer>
+
+    <ia-chat-widget title="IA Gateway Assistant"></ia-chat-widget>
+    <script type="module" src="/widget/ia-chat-widget.js"></script>
+    <script type="module">
+      const widget = document.querySelector('ia-chat-widget');
+      document.getElementById('open-chat').addEventListener('click', async () => {
+        await customElements.whenDefined('ia-chat-widget');
+        widget.open();
+      });
+
+      // Estado real del backend y del modelo (GET /api/v1/health).
+      const badge = document.getElementById('status-badge');
+      const text = document.getElementById('status-text');
+      function show(state, message) {
+        badge.dataset.state = state;
+        text.textContent = message; // nunca innerHTML con datos del servidor
+      }
+      async function checkHealth() {
+        try {
+          const res = await fetch('/api/v1/health', { headers: { Accept: 'application/json' } });
+          const body = await res.json();
+          const llm = body?.checks?.llm;
+          const database = body?.checks?.database;
+          const ocr = body?.checks?.ocr;
+          const coreOk = llm?.status === 'ok' && database?.status === 'ok';
+          if (body?.status === 'ok') {
+            show('ok', `Asistente disponible · ${llm?.model ?? 'modelo local'}`);
+          } else if (coreOk && ocr?.status === 'error') {
+            // El chat de texto funciona; solo falta la lectura de imágenes.
+            show('degraded', 'Asistente disponible · lectura de imágenes no disponible');
+          } else if (llm && llm.status !== 'ok') {
+            show('degraded', 'El modelo no está disponible');
+          } else {
+            show('degraded', 'Servicio con problemas');
+          }
+        } catch {
+          show('offline', 'Sin conexión con el backend');
+        }
+      }
+      checkHealth();
+      setInterval(checkHealth, 30000);
+    </script>
+  </body>
+</html>
